@@ -1,0 +1,29 @@
+<svg width="512" height="512" viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#1e3c72;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#2a5298;stop-opacity:1" />
+    </linearGradient>
+    <linearGradient id="bolt" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" style="stop-color:#FFE066;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#FFB300;stop-opacity:1" />
+    </linearGradient>
+  </defs>
+
+  <!-- Fondo azul redondeado -->
+  <rect width="512" height="512" fill="url(#bg)" rx="96"/>
+
+  <!-- Silueta de documento (orden de trabajo) -->
+  <g opacity="0.20">
+    <path d="M 96 90 L 336 90 L 416 170 L 416 422 L 96 422 Z" fill="white"/>
+    <path d="M 336 90 L 336 170 L 416 170" fill="none" stroke="white" stroke-width="3"/>
+  </g>
+
+  <!-- Rayo amarillo principal -->
+  <path d="M 295 80 L 165 280 L 235 280 L 200 432 L 355 230 L 285 230 L 320 80 Z"
+        fill="url(#bolt)"
+        stroke="#FFFFFF"
+        stroke-width="8"
+        stroke-linejoin="round"
+        stroke-linecap="round"/>
+</svg>
