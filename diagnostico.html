@@ -102,22 +102,30 @@
         </div>`;
         if (!isHttps) hasFailure = true;
 
-        // 2. Manifest accesible
-        let manifestOk = false, manifestData = null;
-        try {
-            const link = document.querySelector('link[rel="manifest"]');
-            if (link) {
-                const resp = await fetch(link.href);
-                manifestOk = resp.ok;
-                if (manifestOk) manifestData = await resp.json();
-            }
-        } catch (e) { manifestOk = false; }
+        // 2. Manifest accesible (intenta varias rutas)
+        let manifestOk = false, manifestData = null, manifestUrl = '';
+        const posiblesManifiestos = [
+            '/prubea/manifest.json',
+            'manifest.json',
+            './manifest.json'
+        ];
+        for (const url of posiblesManifiestos) {
+            try {
+                const resp = await fetch(url);
+                if (resp.ok) {
+                    manifestOk = true;
+                    manifestData = await resp.json();
+                    manifestUrl = url;
+                    break;
+                }
+            } catch (e) { /* intentar siguiente */ }
+        }
         html += `<div class="check ${manifestOk ? 'ok' : 'fail'}">
             <div class="check-icon">${manifestOk ? '✅' : '❌'}</div>
             <div class="check-text">
                 <div class="check-title">manifest.json accesible</div>
-                <div class="check-detail">${manifestOk ? 'Manifest cargado correctamente' : 'No se pudo cargar el manifest — verifica que esté en la raíz'}</div>
-                ${manifestData ? `<pre>${JSON.stringify(manifestData, null, 2).substring(0, 500)}</pre>` : ''}
+                <div class="check-detail">${manifestOk ? 'Manifest cargado desde: ' + manifestUrl : 'No se pudo cargar el manifest desde ninguna ruta. Verifica que el archivo existe en /prubea/manifest.json'}</div>
+                ${manifestData ? `<pre>${JSON.stringify(manifestData, null, 2).substring(0, 800)}</pre>` : ''}
             </div>
         </div>`;
         if (!manifestOk) hasFailure = true;
@@ -146,16 +154,25 @@
         </div>`;
         if (!swOk) hasFailure = true;
 
-        // 4. Iconos
+        // 4. Iconos (verifica que existan en el manifest Y que los archivos carguen)
         let iconsOk = false;
+        let iconChecks = [];
         if (manifestData && manifestData.icons) {
-            iconsOk = manifestData.icons.length >= 2;
+            for (const icon of manifestData.icons) {
+                try {
+                    const resp = await fetch(icon.src, { method: 'HEAD' });
+                    iconChecks.push({ src: icon.src, ok: resp.ok });
+                } catch (e) {
+                    iconChecks.push({ src: icon.src, ok: false });
+                }
+            }
+            iconsOk = iconChecks.length >= 2 && iconChecks.some(c => c.ok);
         }
         html += `<div class="check ${iconsOk ? 'ok' : 'fail'}">
             <div class="check-icon">${iconsOk ? '✅' : '❌'}</div>
             <div class="check-text">
                 <div class="check-title">Iconos del manifest</div>
-                <div class="check-detail">${iconsOk ? 'Tienes ' + manifestData.icons.length + ' iconos definidos' : 'Faltan iconos en el manifest'}</div>
+                <div class="check-detail">${iconChecks.length > 0 ? iconChecks.map(c => (c.ok ? '✅' : '❌') + ' ' + c.src).join('<br>') : 'No hay iconos definidos en el manifest'}</div>
             </div>
         </div>`;
         if (!iconsOk) hasFailure = true;
