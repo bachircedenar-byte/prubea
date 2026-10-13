@@ -407,6 +407,78 @@
             border-radius: 4px;
         }
 
+        /* Paginación de materiales */
+        .materials-pagination {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-top: 12px;
+            padding: 10px 12px;
+            background: #f8f9fa;
+            border: 1px solid #e0e0e0;
+            border-radius: 6px;
+            flex-wrap: wrap;
+        }
+        .materials-pagination .btn-page {
+            background: #1e3c72;
+            color: white;
+            border: none;
+            padding: 6px 12px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 0.85em;
+            font-weight: 600;
+            transition: background 0.15s;
+        }
+        .materials-pagination .btn-page:hover:not(:disabled) {
+            background: #2a5298;
+        }
+        .materials-pagination .btn-page:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+        }
+        .materials-pagination .page-info {
+            font-weight: 600;
+            color: #1e3c72;
+            font-size: 0.9em;
+        }
+        .materials-pagination .items-per-page {
+            font-size: 0.85em;
+            color: #555;
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+        }
+        .materials-pagination .items-per-page select {
+            padding: 4px 8px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            background: white;
+        }
+        .materials-pagination .rows-counter {
+            color: #888;
+            font-size: 0.85em;
+            margin-left: auto;
+        }
+        .materials-pagination .btn-add-material {
+            background: #28a745;
+            color: white;
+            border: none;
+            padding: 6px 14px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-weight: 600;
+            font-size: 0.85em;
+            transition: background 0.15s;
+        }
+        .materials-pagination .btn-add-material:hover {
+            background: #218838;
+        }
+        /* Filas ocultas por paginación */
+        .materials-table tr.material-row-hidden {
+            display: none !important;
+        }
+
         .btn {
             padding: 12px 24px;
             border: none;
@@ -2206,6 +2278,26 @@
                     </tbody>
                 </table>
 
+                <!-- Controles de paginación de materiales -->
+                <div class="materials-pagination" id="materialsPagination">
+                    <button type="button" class="btn-page" id="matPrevBtn" title="Página anterior">‹ Anterior</button>
+                    <span class="page-info" id="matPageInfo">Página 1 de 1</span>
+                    <button type="button" class="btn-page" id="matNextBtn" title="Página siguiente">Siguiente ›</button>
+                    <span class="items-per-page">
+                        Por página:
+                        <select id="matItemsPerPage">
+                            <option value="5" selected>5</option>
+                            <option value="10">10</option>
+                            <option value="15">15</option>
+                            <option value="20">20</option>
+                            <option value="50">50</option>
+                            <option value="all">Todos</option>
+                        </select>
+                    </span>
+                    <span class="rows-counter" id="matCounter">1 material</span>
+                    <button type="button" class="btn-add-material" id="matAddBtn" title="Agregar nueva fila de material">+ Agregar material</button>
+                </div>
+
                 <!-- Foto del Egreso o Reintegro de Materiales -->
                 <div class="photo-category" style="margin-top: 20px;">
                     <h4>
@@ -3750,7 +3842,7 @@
             // Buscar la última fila o crear una nueva
             let lastRow = tbody.lastElementChild;
             if (!lastRow) {
-                addMaterialRow();
+                addMaterialRowWithNavigation();
                 lastRow = tbody.lastElementChild;
             }
 
@@ -3759,7 +3851,7 @@
             const lastCodigo = lastRow.querySelector('input[name="materialCodigo[]"]').value;
 
             if (lastDesc || lastCodigo) {
-                addMaterialRow();
+                addMaterialRowWithNavigation();
                 lastRow = tbody.lastElementChild;
             }
 
@@ -3814,7 +3906,110 @@
             }
         });
 
-        // Agregar fila de material
+        // ============================================================
+        // PAGINACIÓN DE MATERIALES EN EL FORMULARIO
+        // ============================================================
+        let materialsCurrentPage = 1;
+        let materialsPerPage = 5;
+        // Flag para evitar re-paginar en operaciones masivas (autosave, cargar orden)
+        let suppressMaterialsPagination = false;
+
+        // Devuelve el total de filas en materialsBody
+        function getTotalMaterialRows() {
+            return document.querySelectorAll('#materialsBody tr').length;
+        }
+
+        // Aplica la paginación: muestra/oculta filas según página actual
+        function applyMaterialsPagination() {
+            if (suppressMaterialsPagination) return;
+            const allRows = document.querySelectorAll('#materialsBody tr');
+            const total = allRows.length;
+            const perPage = materialsPerPage === 'all' ? Math.max(total, 1) : materialsPerPage;
+            const totalPages = materialsPerPage === 'all' ? 1 : Math.max(Math.ceil(total / perPage), 1);
+
+            // Ajustar página actual si está fuera de rango
+            if (materialsCurrentPage > totalPages) materialsCurrentPage = totalPages;
+            if (materialsCurrentPage < 1) materialsCurrentPage = 1;
+
+            const start = (materialsCurrentPage - 1) * perPage;
+            const end = perPage === 'all' ? total : start + perPage;
+
+            // Mostrar/ocultar filas
+            allRows.forEach((row, i) => {
+                if (i >= start && i < end) {
+                    row.classList.remove('material-row-hidden');
+                } else {
+                    row.classList.add('material-row-hidden');
+                }
+            });
+
+            // Actualizar controles
+            const pageInfo = document.getElementById('matPageInfo');
+            const prevBtn = document.getElementById('matPrevBtn');
+            const nextBtn = document.getElementById('matNextBtn');
+            const counter = document.getElementById('matCounter');
+            if (pageInfo) pageInfo.textContent = `Página ${materialsCurrentPage} de ${totalPages}`;
+            if (prevBtn) prevBtn.disabled = materialsCurrentPage <= 1;
+            if (nextBtn) nextBtn.disabled = materialsCurrentPage >= totalPages;
+            if (counter) {
+                counter.textContent = total === 1 ? '1 material' : `${total} materiales`;
+            }
+        }
+
+        // Ir a una página específica
+        function materialsGoToPage(page) {
+            const total = getTotalMaterialRows();
+            const perPage = materialsPerPage === 'all' ? Math.max(total, 1) : materialsPerPage;
+            const totalPages = materialsPerPage === 'all' ? 1 : Math.max(Math.ceil(total / perPage), 1);
+            if (page < 1) page = 1;
+            if (page > totalPages) page = totalPages;
+            materialsCurrentPage = page;
+            applyMaterialsPagination();
+        }
+
+        // Cambiar cantidad por página
+        function materialsChangePerPage(value) {
+            materialsPerPage = value === 'all' ? 'all' : parseInt(value, 10);
+            materialsCurrentPage = 1;
+            applyMaterialsPagination();
+        }
+
+        // Inicializar listeners de paginación (se llama al cargar el DOM)
+        function initMaterialsPagination() {
+            const prevBtn = document.getElementById('matPrevBtn');
+            const nextBtn = document.getElementById('matNextBtn');
+            const select = document.getElementById('matItemsPerPage');
+            const addBtn = document.getElementById('matAddBtn');
+            if (prevBtn) prevBtn.addEventListener('click', () => materialsGoToPage(materialsCurrentPage - 1));
+            if (nextBtn) nextBtn.addEventListener('click', () => materialsGoToPage(materialsCurrentPage + 1));
+            if (select) select.addEventListener('change', (e) => materialsChangePerPage(e.target.value));
+            if (addBtn) addBtn.addEventListener('click', () => addMaterialRowWithNavigation());
+            applyMaterialsPagination();
+        }
+
+        // Agregar fila de material + ir a la página donde quedó + enfocar
+        // Esta es la versión "explícita" que llama el botón "+ Agregar material"
+        function addMaterialRowWithNavigation() {
+            addMaterialRow();
+            // Navegar a la página de la nueva fila
+            const total = getTotalMaterialRows();
+            const perPage = materialsPerPage === 'all' ? Math.max(total, 1) : materialsPerPage;
+            const newPage = materialsPerPage === 'all' ? 1 : Math.ceil(total / perPage);
+            materialsCurrentPage = newPage;
+            applyMaterialsPagination();
+            // Enfocar la primera celda de la nueva fila
+            setTimeout(() => {
+                const allRows = document.querySelectorAll('#materialsBody tr');
+                const newRow = allRows[allRows.length - 1];
+                if (newRow) {
+                    const firstInput = newRow.querySelector('input');
+                    if (firstInput) firstInput.focus();
+                }
+            }, 30);
+        }
+
+        // Agregar fila de material — versión SEGURA: solo añade, NO navega
+        // Usada por: seleccionarMaterial, cargarOrden, recuperarBorrador, etc.
         function addMaterialRow() {
             const tbody = document.getElementById('materialsBody');
             const row = document.createElement('tr');
@@ -3825,6 +4020,9 @@
                 <td><button type="button" class="btn btn-danger" onclick="removeMaterialRow(this)">X</button></td>
             `;
             tbody.appendChild(row);
+            // Solo re-pagina para mostrar los controles correctos,
+            // pero NO cambia la página actual
+            applyMaterialsPagination();
         }
 
         // Eliminar fila de material
@@ -3836,6 +4034,7 @@
             } else {
                 row.querySelectorAll('input').forEach(input => input.value = '');
             }
+            applyMaterialsPagination();
         }
 
         // Mostrar panel de fotos según selección
@@ -5097,22 +5296,26 @@
             let photoIndex = 0;
 
             while (photoIndex < totalPhotos) {
-                // Determinar cuántas fotos van en esta "página" (grupo de 4 máximo)
+                // Determinar cuántas fotos van en esta "página" (grupo de 3 máximo)
                 const remaining = totalPhotos - photoIndex;
-                const photosInThisGroup = Math.min(4, remaining);
+                const photosInThisGroup = Math.min(3, remaining);
 
-                // Agregar título con grupo si hay más de 4 fotos
-                const groupTitle = totalPhotos > 4 ? `${title} (${photoIndex + 1}-${photoIndex + photosInThisGroup} de ${totalPhotos})` : `${title} (${totalPhotos})`;
+                // Agregar título con grupo si hay más de 3 fotos
+                const groupTitle = totalPhotos > 3 ? `${title} (${photoIndex + 1}-${photoIndex + photosInThisGroup} de ${totalPhotos})` : `${title} (${totalPhotos})`;
 
                 result += `<div class="photo-category">`;
                 result += `<p class="photo-title"><strong>FOTOS ${groupTitle}</strong></p>`;
                 result += `<div class="photos-grid">`;
 
-                // Agregar las fotos de este grupo (solo la imagen, sin coordenadas debajo)
+                // Agregar las fotos de este grupo con número
                 for (let i = 0; i < photosInThisGroup; i++) {
                     const photo = photosArray[photoIndex + i];
-                    result += `<div class="photo-item">
-                        <img src="${photo.data}" alt="${altText} ${photoIndex + i + 1}">
+                    const photoNumber = photoIndex + i + 1;
+                    result += `<div class="photo-wrapper">
+                        <div class="photo-label">Fotografía ${photoNumber}</div>
+                        <div class="photo-item">
+                            <img src="${photo.data}" alt="${altText} ${photoNumber}">
+                        </div>
                     </div>`;
                 }
 
@@ -5184,6 +5387,16 @@
 
                 // Obtener logo antes de generar el PDF
                 const logoBase64 = await getLogoBase64();
+                console.log('[PDF] Logo base64 length:', logoBase64 ? logoBase64.length : 0);
+
+                // Inyectar marca de agua en CADA sección del HTML
+                function injectWatermarkIntoSections(htmlStr) {
+                    if (!logoBase64) return htmlStr;
+                    const wm = `<div class="section-watermark"><img src="${logoBase64}" alt="CEDENAR Watermark"></div>`;
+                    return htmlStr
+                        .replace(/(<div class="section">)/g, '$1' + wm)
+                        .replace(/(<div class="signature-section-final">)/g, '$1' + wm);
+                }
 
                 // Crear contenido HTML para el PDF
                 let html = `
@@ -5196,23 +5409,33 @@
                     * { margin: 0; padding: 0; box-sizing: border-box; }
                     body { font-family: Arial, sans-serif; font-size: 11px; padding: 15px; background: white; }
                     /* Marca de agua sutil en cada página */
-                    .watermark {
-                        position: fixed;
+                    /* Marca de agua por sección — se inserta vía JS en cada .section */
+                    .section-watermark {
+                        position: absolute;
                         top: 0;
                         left: 0;
-                        width: 100%;
-                        height: 100%;
-                        pointer-events: none;
-                        z-index: 0;
+                        right: 0;
+                        bottom: 0;
                         display: flex;
                         align-items: center;
                         justify-content: center;
+                        pointer-events: none;
+                        z-index: 0;
                     }
-                    .watermark img {
-                        max-width: 50%;
-                        max-height: 50%;
-                        opacity: 0.07;
+                    .section-watermark img {
+                        width: 60%;
+                        height: auto;
+                        opacity: 0.10;
                         object-fit: contain;
+                    }
+                    /* El contenido de la sección va encima de la marca */
+                    .section, .signature-section-final {
+                        position: relative;
+                    }
+                    .section > *:not(.section-watermark),
+                    .signature-section-final > *:not(.section-watermark) {
+                        position: relative;
+                        z-index: 1;
                     }
                     /* Encabezado corporativo primera página */
                     .corporate-header {
@@ -5251,7 +5474,7 @@
                     .ch-left-text .cedenar-yellow { color: #ffcc00; }
                     .ch-center {
                         display: table-cell;
-                        width: 50%;
+                        width: 45%;
                         padding: 8px;
                         vertical-align: middle;
                         text-align: center;
@@ -5263,42 +5486,128 @@
                         font-weight: bold;
                         text-transform: uppercase;
                     }
+                    .ch-subtitle {
+                        font-size: 8px;
+                        color: #444;
+                        margin-top: 4px;
+                    }
+                    /* Celda derecha: metadatos tipo "formato oficial" */
                     .ch-right {
                         display: table-cell;
-                        width: 25%;
-                        padding: 8px;
+                        width: 30%;
+                        padding: 0;
                         vertical-align: top;
-                        text-align: center;
-                        font-size: 9px;
-                    }
-                    .ch-right p {
-                        margin: 2px 0;
-                        font-size: 9px;
-                    }
-                    .ch-right .ch-page {
-                        font-weight: bold;
-                        font-size: 10px;
-                        margin-bottom: 4px;
-                    }
-                    .ch-right .ch-code {
-                        font-weight: bold;
-                    }
-                    .corporate-header-bottom {
-                        padding: 6px 10px;
-                        background: #f5f5f5;
-                        text-align: center;
-                    }
-                    .ch-object-label {
                         font-size: 8px;
+                        border-collapse: collapse;
+                    }
+                    .ch-meta-table {
+                        width: 100%;
+                        border-collapse: collapse;
+                    }
+                    .ch-meta-table td {
+                        border: 1px solid #000;
+                        padding: 3px 5px;
+                        font-size: 8px;
+                        vertical-align: middle;
+                    }
+                    .ch-meta-table td.ch-meta-label {
+                        background: #f0f0f0;
+                        font-weight: bold;
+                        width: 45%;
+                        text-transform: uppercase;
+                    }
+                    .ch-meta-table td.ch-meta-value {
                         font-weight: bold;
                         color: #000;
                     }
-                    .ch-object-text {
+                    /* Pie de cabecera: PROCESO + PÁGINA */
+                    .corporate-header-bottom {
+                        display: table;
+                        width: 100%;
+                        padding: 0;
+                        background: #f5f5f5;
+                        border-top: 1px solid #000;
+                    }
+                    .ch-process {
+                        display: table-cell;
+                        width: 80%;
+                        padding: 6px 10px;
+                        text-align: left;
                         font-size: 8px;
-                        color: #333;
+                        border-right: 1px solid #000;
+                    }
+                    .ch-process-label {
+                        font-weight: bold;
+                        text-transform: uppercase;
+                    }
+                    .ch-pages {
+                        display: table-cell;
+                        width: 20%;
+                        padding: 6px 10px;
+                        text-align: center;
+                        font-size: 8px;
+                        font-weight: bold;
+                    }
+                    @page {
+                        margin: 15mm 12mm 15mm 12mm;
+                        @bottom-center {
+                            content: "Página " counter(page) " de " counter(pages);
+                            font-size: 8px;
+                            color: #666;
+                        }
                     }
                     .section { margin-bottom: 15px; border: 1px solid #1e3c72; position: relative; z-index: 1; }
                     .section-title { background: #1e3c72; color: white; padding: 6px 10px; font-weight: bold; font-size: 12px; }
+                    /* Sub-sección dentro de una sección (ej: Localización dentro de Planificación) */
+                    .subsection-header {
+                        background: #e8e8e8;
+                        border-left: 4px solid #1e3c72;
+                        color: #1e3c72;
+                        padding: 4px 10px;
+                        margin: 10px 0 0;
+                        font-weight: bold;
+                        font-size: 10px;
+                        text-transform: uppercase;
+                    }
+                    /* Materiales en 2 columnas compactas (estilo MT-FO-12) */
+                    .materials-two-col {
+                        display: grid;
+                        grid-template-columns: 1fr 1fr;
+                        gap: 0;
+                        margin: 8px 0;
+                        border: 1px solid #1e3c72;
+                    }
+                    .materials-table-half {
+                        width: 100%;
+                        border-collapse: collapse;
+                        margin: 0;
+                    }
+                    .materials-table-half th {
+                        background: #1e3c72;
+                        color: white;
+                        font-weight: bold;
+                        font-size: 8px;
+                        text-transform: uppercase;
+                        padding: 4px 5px;
+                        border: 1px solid #1e3c72;
+                        text-align: left;
+                    }
+                    .materials-table-half td {
+                        border: 1px solid #ccc;
+                        padding: 3px 5px;
+                        font-size: 8px;
+                        vertical-align: top;
+                    }
+                    .materials-table-half + .materials-table-half th {
+                        border-left: 1px solid #fff;
+                    }
+                    .materials-empty {
+                        padding: 12px;
+                        text-align: center;
+                        color: #999;
+                        font-style: italic;
+                        font-size: 9px;
+                    }
                     .form-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 0; }
                     .form-group { border: 1px solid #ccc; padding: 8px; background: white; }
                     .form-group label { font-weight: bold; font-size: 9px; color: #333; display: block; margin-bottom: 4px; }
@@ -5311,19 +5620,66 @@
                     .signature-section { display: flex; justify-content: space-around; margin-top: 20px; position: relative; z-index: 1; }
                     .signature-box { text-align: center; width: 45%; border: 1px solid #333; padding: 15px; }
                     .signature-line { border-bottom: 1px solid #333; margin-top: 30px; width: 80%; margin-left: auto; margin-right: auto; }
-                    .photos-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; margin-top: 8px; }
+                    .photos-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-top: 8px; }
                     .photo-category { margin-bottom: 10px; page-break-inside: avoid; border: 1px solid #ccc; padding: 8px; position: relative; z-index: 1; }
                     .photo-title { margin-bottom: 6px; color: #333; font-size: 11px; }
-                    .photo-item { width: 100%; height: 200px; border: 2px solid #1e3c72; overflow: hidden; background: #fff; padding: 3px; page-break-inside: avoid; }
+                    .photo-item { width: 100%; height: 160px; border: 2px solid #1e3c72; overflow: hidden; background: #fff; padding: 3px; page-break-inside: avoid; }
                     .photo-item img { width: 100%; height: 100%; object-fit: contain; }
+                    .photo-label {
+                        background: #1e3c72;
+                        color: white;
+                        font-size: 8px;
+                        font-weight: bold;
+                        text-transform: uppercase;
+                        text-align: center;
+                        padding: 3px 0;
+                        margin-bottom: 3px;
+                        letter-spacing: 0.5px;
+                    }
+                    .photo-wrapper { display: flex; flex-direction: column; }
                     .photo-break { page-break-before: always; }
                     .photo-row { display: contents; }
                     .photos-wrapper { page-break-inside: avoid; }
                     .contact-info { margin-top: 15px; padding: 8px; background: #f5f5f5; text-align: center; font-size: 9px; border: 1px solid #ccc; position: relative; z-index: 1; }
                     .field-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 0; margin-bottom: 10px; }
-                    .field-box { border: 1px solid #333; padding: 6px; background: white; }
-                    .field-box label { font-weight: bold; font-size: 8px; display: block; margin-bottom: 2px; }
-                    .field-box p { border-bottom: 1px solid #999; font-size: 9px; min-height: 14px; }
+                    .field-box {
+                        border: 1px solid #333;
+                        padding: 6px 8px;
+                        background: white;
+                        display: flex;
+                        align-items: flex-end;
+                        gap: 6px;
+                    }
+                    .field-box label {
+                        font-weight: bold;
+                        font-size: 8px;
+                        text-transform: uppercase;
+                        color: #000;
+                        white-space: nowrap;
+                        flex-shrink: 0;
+                    }
+                    .field-box p {
+                        flex: 1;
+                        margin: 0;
+                        padding: 0 4px 2px;
+                        border-bottom: 1px solid #999;
+                        font-size: 10px;
+                        min-height: 14px;
+                    }
+                    /* Para campos multilínea (textareas) — label sigue arriba en mayúsculas */
+                    .field-box-multiline {
+                        display: block;
+                    }
+                    .field-box-multiline label {
+                        display: block;
+                        margin-bottom: 4px;
+                    }
+                    .field-box-multiline p {
+                        display: block;
+                        border-bottom: 1px solid #999;
+                        font-size: 10px;
+                        white-space: pre-wrap;
+                    }
                     .signature-section-final {
                         page-break-before: always;
                         page-break-inside: avoid;
@@ -5361,7 +5717,6 @@
                 </style>
             </head>
             <body>
-                ${logoBase64 ? `<div class="watermark"><img src="${logoBase64}" alt="CEDENAR Watermark"></div>` : ''}
                 <div class="corporate-header">
                     <div class="corporate-header-top">
                         <div class="ch-left">
@@ -5371,18 +5726,38 @@
                             </div>
                         </div>
                         <div class="ch-center">
-                            <div class="ch-title">INFORME DE TRABAJO<br>DISTRIBUIDOR PROGRAMADO</div>
+                            <div class="ch-title">${pdfTitulo || 'Orden de Trabajo'}</div>
+                            <div class="ch-subtitle">CEDENAR S.A.E.S.P. — Centrales Eléctricas de Nariño</div>
                         </div>
                         <div class="ch-right">
-                            <p class="ch-page">Páginas Totales:</p>
-                            <p class="ch-code">FOR-DISTRI-OMRS-020</p>
-                            <p>VERSIÓN: 2.0</p>
-                            <p>03/DIC/2018</p>
+                            <table class="ch-meta-table">
+                                <tr>
+                                    <td class="ch-meta-label">Nombre Doc.</td>
+                                    <td class="ch-meta-value">Orden de Trabajo</td>
+                                </tr>
+                                <tr>
+                                    <td class="ch-meta-label">Código</td>
+                                    <td class="ch-meta-value">OT-FO-01</td>
+                                </tr>
+                                <tr>
+                                    <td class="ch-meta-label">Versión</td>
+                                    <td class="ch-meta-value">001</td>
+                                </tr>
+                                <tr>
+                                    <td class="ch-meta-label">Fecha</td>
+                                    <td class="ch-meta-value">${new Date().toLocaleDateString('es-CO')}</td>
+                                </tr>
+                            </table>
                         </div>
                     </div>
                     <div class="corporate-header-bottom">
-                        <p class="ch-object-label">OBJETO DEL FORMATO:</p>
-                        <p class="ch-object-text">Describir las características de las actividades de mantenimiento a realizar, el lugar preciso y el o los responsables de la ejecución.</p>
+                        <div class="ch-process">
+                            <span class="ch-process-label">Proceso:</span>
+                            Mantenimiento de redes eléctricas MT/BT — Gestión de órdenes de trabajo
+                        </div>
+                        <div class="ch-pages">
+                            Página <span class="pageNumber">1</span>
+                        </div>
                     </div>
                 </div>
 
@@ -5398,23 +5773,29 @@
                         <div class="field-box"><label>Fecha Consignación:</label><p>${form.fechaConsignacion?.value || ''}</p></div>
                         <div class="field-box"><label>Circuito:</label><p>${form.circuito?.value || ''}</p></div>
                     </div>
-                    <div class="field-row">
+
+                    <!-- Sub-sección LOCALIZACIÓN (consolidada) -->
+                    <div class="subsection-header">Localización</div>
+                    <div class="field-row" style="margin-bottom: 0;">
                         <div class="field-box"><label>Zona:</label><p>${form.zona?.value || ''}</p></div>
-                        <div class="field-box" style="grid-column: span 2;"><label>Municipio:</label><p>${form.municipio?.value || ''}</p></div>
+                        <div class="field-box"><label>Municipio:</label><p>${form.municipio?.value || ''}</p></div>
                     </div>
                     <div class="field-row">
-                        <div class="field-box" style="grid-column: span 2;"><label>Dirección:</label><p>${form.direccion?.value || ''}</p></div>
-                        <div class="field-box"><label>Tipo de Carga:</label><p>${getRadioValue('tipoCarga')}</p></div>
+                        <div class="field-box" style="grid-column: span 3;"><label>Dirección:</label><p>${form.direccion?.value || ''}</p></div>
+                    </div>
+
+                    <div class="field-row">
+                        <div class="field-box" style="grid-column: span 3;"><label>Tipo de Carga:</label><p>${getRadioValue('tipoCarga')}</p></div>
                     </div>
                     <div class="field-row">
                         <div class="field-box" style="grid-column: span 3;"><label>Coordinador Asignado:</label><p>${form.coordinador?.value || ''}</p></div>
                     </div>
-                    <div style="padding: 8px; border: 1px solid #ccc; margin: 8px;">
-                        <label style="font-weight: bold; font-size: 9px; display: block; margin-bottom: 4px;">Descripción de Trabajos a Realizar:</label>
+                    <div class="field-box-multiline" style="padding: 8px; border: 1px solid #ccc; margin: 8px;">
+                        <label style="font-weight: bold; font-size: 9px; text-transform: uppercase; display: block; margin-bottom: 4px;">Descripción de Trabajos a Realizar:</label>
                         <p style="min-height: 40px; border-bottom: 1px solid #999; font-size: 10px; white-space: pre-wrap;">${form.descripcionTrabajos?.value || ''}</p>
                     </div>
-                    <div style="padding: 8px; border: 1px solid #ccc; margin: 0 8px 8px;">
-                        <label style="font-weight: bold; font-size: 9px; display: block; margin-bottom: 4px;">Estructura más cercana:</label>
+                    <div class="field-box-multiline" style="padding: 8px; border: 1px solid #ccc; margin: 0 8px 8px;">
+                        <label style="font-weight: bold; font-size: 9px; text-transform: uppercase; display: block; margin-bottom: 4px;">Estructura más cercana:</label>
                         <p style="min-height: 20px; border-bottom: 1px solid #999; font-size: 10px;">${form.observaciones?.value || ''}</p>
                     </div>
                 </div>
@@ -5426,8 +5807,8 @@
                         <div class="field-box"><label>Fecha Finalización:</label><p>${form.fechaFinalizacion?.value || ''}</p></div>
                         <div class="field-box"><label>Hora de Finalización:</label><p>${form.horaFinalizacion?.value || ''}</p></div>
                     </div>
-                    <div style="padding: 8px; border: 1px solid #ccc; margin: 8px;">
-                        <label style="font-weight: bold; font-size: 9px; display: block; margin-bottom: 4px;">Observaciones del Trabajo:</label>
+                    <div class="field-box-multiline" style="padding: 8px; border: 1px solid #ccc; margin: 8px;">
+                        <label style="font-weight: bold; font-size: 9px; text-transform: uppercase; display: block; margin-bottom: 4px;">Observaciones del Trabajo:</label>
                         <p style="min-height: 40px; border-bottom: 1px solid #999; font-size: 10px;">${form.observacionesEjecucion?.value || ''}</p>
                     </div>
                 </div>
@@ -5439,22 +5820,69 @@
                         <div class="field-box"><label>Fecha:</label><p>${form.fechaRequisicion?.value || ''}</p></div>
                         <div class="field-box"></div>
                     </div>
-                    <table>
-                        <thead><tr><th style="width:60%;">Descripción</th><th style="width:25%;">Código</th><th style="width:15%;">Cantidad</th></tr></thead>
-                        <tbody>`;
+                    <div class="materials-two-col">`;
 
-            // Agregar materiales
+            // Recolectar materiales del formulario
+            const materiales = [];
             const materialRows = document.querySelectorAll('#materialsBody tr');
             materialRows.forEach(row => {
                 const desc = row.querySelector('input[name="materialDescripcion[]"]').value;
                 const codigo = row.querySelector('input[name="materialCodigo[]"]').value;
                 const cantidad = row.querySelector('input[name="materialCantidad[]"]').value;
                 if (desc || codigo || cantidad) {
-                    html += `<tr><td>${desc}</td><td>${codigo}</td><td>${cantidad}</td></tr>`;
+                    materiales.push({ desc, codigo, cantidad });
                 }
             });
 
-            html += `</tbody></table>
+            if (materiales.length > 0) {
+                // Dividir en 2 mitades (primera mitad un poco más grande si impar)
+                const mitad = Math.ceil(materiales.length / 2);
+                const col1 = materiales.slice(0, mitad);
+                const col2 = materiales.slice(mitad);
+
+                // Columna izquierda
+                html += `<table class="materials-table-half">
+                    <thead><tr>
+                        <th style="width:55%;">Descripción</th>
+                        <th style="width:25%;">Código</th>
+                        <th style="width:20%;">Cant.</th>
+                    </tr></thead>
+                    <tbody>
+                        ${col1.map(m => `<tr><td>${m.desc || ''}</td><td>${m.codigo || ''}</td><td>${m.cantidad || ''}</td></tr>`).join('')}
+                    </tbody>
+                </table>`;
+
+                // Columna derecha (si hay items)
+                if (col2.length > 0) {
+                    html += `<table class="materials-table-half">
+                        <thead><tr>
+                            <th style="width:55%;">Descripción</th>
+                            <th style="width:25%;">Código</th>
+                            <th style="width:20%;">Cant.</th>
+                        </tr></thead>
+                        <tbody>
+                            ${col2.map(m => `<tr><td>${m.desc || ''}</td><td>${m.codigo || ''}</td><td>${m.cantidad || ''}</td></tr>`).join('')}
+                        </tbody>
+                    </table>`;
+                } else {
+                    // Si no hay items para la segunda columna, dejar espacio visualmente
+                    html += `<table class="materials-table-half">
+                        <thead><tr>
+                            <th style="width:55%;">Descripción</th>
+                            <th style="width:25%;">Código</th>
+                            <th style="width:20%;">Cant.</th>
+                        </tr></thead>
+                        <tbody>
+                            <tr><td colspan="3" class="materials-empty">(Continuación)</td></tr>
+                        </tbody>
+                    </table>`;
+                }
+            } else {
+                // No hay materiales: mostrar mensaje
+                html += `<div class="materials-empty" style="grid-column: span 2;">No se agregaron materiales a esta orden</div>`;
+            }
+
+            html += `</div>
                     ${generatePhotoSection('FOTO DEL EGRESO O REINTEGRO DE MATERIALES', photos.egreso, 'Foto egreso o reintegro de materiales')}
                 </div>
 
@@ -5492,6 +5920,9 @@
                 </div>
             </body>
             </html>`;
+
+                // Inyectar marca de agua en cada sección antes de escribir
+                html = injectWatermarkIntoSections(html);
 
                 // Escribir contenido y abrir print dialog
                 printWindow.document.write(html);
@@ -5705,6 +6136,7 @@
             initVoiceButtons();
             verificarBackupAutomatico();
             initPWA();
+            initMaterialsPagination();
 
             // Listeners de los inputs de fecha del backup
             const backupDesde = document.getElementById('backupDesde');
